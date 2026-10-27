@@ -221,18 +221,37 @@ class CLIPValidator:
             "fire_safety":1.0 if any(any(kw in lbl for kw in ['fire_extinguisher', 'fire_prevention', 'extinguisher']) for lbl in yolo_labels) else 0.0,
         }
 
-        # ── Step 2: CLIP scans ALL PPE items independently ────────────────────
+        # Explicit negative detections from YOLO (e.g. 'no-hard_hat', 'no-glove')
+        yolo_negatives = {
+            "hard_hat": any(lbl in yolo_labels for lbl in ['no-hard_hat', 'no_hard_hat', 'no-helmet']),
+            "vest": 'no-vest' in yolo_labels,
+            "glass": any(lbl in yolo_labels for lbl in ['no-glass', 'no-glasses']),
+            "glove": any(lbl in yolo_labels for lbl in ['no-glove', 'no-gloves']),
+            "boots": any(lbl in yolo_labels for lbl in ['no-boots', 'no-boot']),
+            "ear_prot": any(lbl in yolo_labels for lbl in ['no-ear-protection', 'no-ear_protection']),
+            "mask": 'no-mask' in yolo_labels,
+        }
+
+        # ── Step 2: CLIP scans PPE items ──────────────────────────────────────
         clip_result = {}
         for ppe_key, (pos, neg) in CLIP_PPE_PROMPTS.items():
             pos_prob, _ = self._score(cropped_pil_image, pos, neg)
-            clip_result[ppe_key] = 1.0 if pos_prob > 0.55 else 0.0
+            clip_result[ppe_key] = 1.0 if pos_prob > 0.75 else 0.0
 
         # ── Step 3: Merge ──────────────────────────────────────────────────────
-        # An item is present if EITHER source confirms it.
-        # YOLO cannot remove something CLIP confirmed, and vice versa.
+        # YOLO is the primary authority for PPE detection.
+        # 1. If YOLO explicitly detected a negative (e.g. no-hard_hat), it is NEVER worn (0.0).
+        # 2. For primary gear ('hard_hat', 'vest'), YOLO detection is authoritative;
+        #    CLIP whole-body prompts must not hallucinate a hard hat or vest if YOLO saw none.
+        # 3. For minor gear only, if YOLO was unobserved (neither pos nor neg), CLIP can gap-fill.
         merged = {**yolo_result}
         for ppe_key in clip_result:
-            if yolo_result[ppe_key] == 0.0 and clip_result[ppe_key] == 1.0:
+            if yolo_negatives.get(ppe_key, False):
+                merged[ppe_key] = 0.0
+            elif ppe_key in ("hard_hat", "vest"):
+                # YOLO detector is authoritative for helmet/vest; do not let CLIP hallucinate
+                merged[ppe_key] = yolo_result[ppe_key]
+            elif yolo_result[ppe_key] == 0.0 and clip_result[ppe_key] == 1.0:
                 print(f"[CLIP GAP FILL] '{ppe_key}' missed by YOLO, confirmed by CLIP")
                 merged[ppe_key] = 1.0
 

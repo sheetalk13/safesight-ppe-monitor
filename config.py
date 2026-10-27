@@ -8,7 +8,7 @@ and the color map used when drawing bounding boxes on frames.
 import torch
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-BOX_THRESHOLD = 0.40
+BOX_THRESHOLD = 0.30
 
 LABEL_COLORS = {
     "worker":              (180, 180, 180),

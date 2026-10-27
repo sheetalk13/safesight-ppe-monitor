@@ -52,17 +52,7 @@ def _build_video_summary(frame_idx, src_fps, step, sample_fps,
                           all_labels, all_violations,
                           partial=False, sampled_count=0,
                           activity_window=None):
-    # Only keep a "no-X" label if the positive "X" was never detected by YOLO
-    clean_labels = set()
-    for label in all_labels:
-        if label.startswith("no-"):
-            positive_version = label[3:]
-            if positive_version not in all_labels:
-                clean_labels.add(label)
-        else:
-            clean_labels.add(label)
-
-    ui_labels = sorted(lbl.replace("_", " ").replace("-", " ").title() for lbl in clean_labels)
+    ui_labels = sorted(lbl.replace("_", " ").replace("-", " ").title() for lbl in all_labels)
     status = "⏳ Processing..." if partial else "✅ Complete"
 
     lines = [

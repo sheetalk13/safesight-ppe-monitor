@@ -88,8 +88,6 @@ def _build_worker_entry(worker_id: str, worn_labels: list, worker_json: dict, vi
     if worker_json.get("hard_hat", 0.0) == 0.0:
         if "hard_hat" not in missing_required:
             missing_required.append("hard_hat")
-        else:
-            unconfirmed.append("hard_hat")
 
     if worker_json.get("boots", 0.0) == 0.0:
         if "boots" not in missing_required:
@@ -110,9 +108,11 @@ def _build_worker_entry(worker_id: str, worn_labels: list, worker_json: dict, vi
         formatted_missing = [item.replace("_", " ").title() for item in missing_required]
         desc_text = f"[{activity.upper()}] Missing: {', '.join(formatted_missing)}"
 
-        # Elevate severity if required hot-work gear is missing
+        # Elevate severity if required gear is missing
         if activity != "light_labor" and severity_label in ["NONE", "LOW", "MEDIUM"]:
             severity_label = "HIGH"
+        elif severity_label == "NONE":
+            severity_label = "MEDIUM"
     elif unconfirmed:
         formatted_unconfirmed = [item.replace("_", " ").title() for item in unconfirmed]
         desc_text = f"[{activity.upper()}] Unconfirmed (partially out of frame): {', '.join(formatted_unconfirmed)}"
@@ -136,6 +136,7 @@ def _build_worker_entry(worker_id: str, worn_labels: list, worker_json: dict, vi
         "optional_ppe": activity_opt,
         "confirmed_ppe": confirmed_ppe,
         "missing_required": missing_required,
+        "unconfirmed_ppe": unconfirmed,
         "ppe_worn": worn_labels,
         "violation": is_violation,
         "severity": severity_label,

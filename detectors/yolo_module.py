@@ -41,22 +41,40 @@ class VisionModule:
         # If there are detections
         if result.boxes is not None and len(result.boxes) > 0:
             
-            # 2. Find all positive classes currently detected in this frame
-            detected_positives = set()
-            for cls in result.boxes.cls:
-                label = self.names[int(cls)].lower()
-                if not label.startswith('no-'):
-                    detected_positives.add(label)
-
-            # 3. Filter out negative classes (e.g., 'no-boots') if the positive ('boots') exists
+            # 2. Filter out conflicting negative classes (e.g., 'no-boots' vs 'boots')
+            # ONLY when they spatially overlap on the exact same location (IoU > 0.3 or IoA > 0.4).
+            boxes_coords = result.boxes.xyxy.tolist()
             keep_indices = []
             for i, cls in enumerate(result.boxes.cls):
                 label = self.names[int(cls)].lower()
                 
                 if label.startswith('no-'):
-                    positive_version = label[3:]  # removes 'no-' (e.g., 'no-boots' -> 'boots')
-                    if positive_version in detected_positives:
-                        continue  # Skip adding this to the keep list
+                    positive_version = label[3:]  # e.g., 'no-boots' -> 'boots', 'no-hard_hat' -> 'hard_hat'
+                    neg_box = boxes_coords[i]
+                    conflicting = False
+                    
+                    for j, other_cls in enumerate(result.boxes.cls):
+                        if i == j:
+                            continue
+                        other_label = self.names[int(other_cls)].lower()
+                        if other_label == positive_version:
+                            pos_box = boxes_coords[j]
+                            ix1 = max(neg_box[0], pos_box[0])
+                            iy1 = max(neg_box[1], pos_box[1])
+                            ix2 = min(neg_box[2], pos_box[2])
+                            iy2 = min(neg_box[3], pos_box[3])
+                            if ix2 > ix1 and iy2 > iy1:
+                                inter = (ix2 - ix1) * (iy2 - iy1)
+                                a_neg = (neg_box[2] - neg_box[0]) * (neg_box[3] - neg_box[1])
+                                a_pos = (pos_box[2] - pos_box[0]) * (pos_box[3] - pos_box[1])
+                                union = a_neg + a_pos - inter
+                                iou = inter / union if union > 0 else 0
+                                ioa = inter / min(a_neg, a_pos) if min(a_neg, a_pos) > 0 else 0
+                                if iou > 0.3 or ioa > 0.4:
+                                    conflicting = True
+                                    break
+                    if conflicting:
+                        continue  # Positive confirmed on this exact object; drop conflicting negative
                         
                 keep_indices.append(i)
 
